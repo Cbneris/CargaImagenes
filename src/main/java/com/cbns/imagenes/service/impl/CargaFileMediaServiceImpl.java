@@ -80,7 +80,29 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         return ResponseEntity.ok("Imagen cargada exitosamente.");
 	}
 
-    private String obtenerExtension(String filename) {
+
+    @Override
+    public String obtenerIpLocal() {
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> interfaces = java.net.NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                java.net.NetworkInterface ni = interfaces.nextElement();
+                if (ni.isLoopback() || !ni.isUp()) continue;
+                java.util.Enumeration<java.net.InetAddress> addresses = ni.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    java.net.InetAddress addr = addresses.nextElement();
+                    if (!addr.isLoopbackAddress() && addr.isSiteLocalAddress()) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return "127.0.0.1"; // Fallback
+    }
+
+    public String obtenerExtension(String filename) {
         int punto = filename.lastIndexOf('.');
         return (punto > 0) ? filename.substring(punto) : "";
     }
