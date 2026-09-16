@@ -13,7 +13,7 @@ import com.cbns.imagenes.service.CargaFileMediaService;
 
 @RestController
 @RequestMapping("/cargaImagenes")
-@CrossOrigin(origins = "http://192.168.1.17:5173") 
+@CrossOrigin(origins = "http://192.168.1.13:5174")
 public class UploadImagesController {
 
 	@Autowired
