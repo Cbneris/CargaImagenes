@@ -7,13 +7,13 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.Enumeration;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.cbns.imagenes.service.CargaFileMediaService;
 import com.cbns.imagenes.util.DirectorioUtil;
@@ -25,7 +25,7 @@ import com.drew.metadata.exif.ExifSubIFDDirectory;
 @Service
 public class CargaFileMediaServiceImpl implements CargaFileMediaService {
 
-    private static final Logger logger = Logger.getLogger(CargaFileMediaServiceImpl.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(CargaFileMediaServiceImpl.class);
 
 //    private final String UPLOAD_DIR = "B:\\ShareFolder\\Imagenes\\";
     private final String UPLOAD_DIR = "C:\\Users\\Christian Neri\\Pictures\\Respaldo_fotos\\";
@@ -48,7 +48,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
             guardarArchivo(file, owner, fechaResultado, extension);
 
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error al procesar la carga de imagen", e);
+            logger.error("Error al procesar la carga de imagen", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
 
@@ -75,7 +75,13 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
      * Guarda el archivo con el nombre base, o con un sufijo numérico si ya existe.
      */
     private void guardarArchivo(MultipartFile file, String owner, String fechaResultado, String extension) throws IOException {
-        File destino = new File(UPLOAD_DIR + owner, fechaResultado + extension);
+        String anio = obtenerAnio(fechaResultado);
+        File directorioAnio = new File(new File(UPLOAD_DIR, owner), anio);
+        if (!DirectorioUtil.validaDirectorio(directorioAnio.getPath())) {
+            throw new IOException("No se pudo crear el directorio para el año " + anio);
+        }
+
+        File destino = new File(directorioAnio, fechaResultado + extension);
 
         if (!destino.exists()) {
             file.transferTo(destino);
@@ -83,19 +89,26 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
             return;
         }
 
-        File destinoConNumero = generarNombreDisponible(owner, fechaResultado, extension);
+        File destinoConNumero = generarNombreDisponible(directorioAnio, fechaResultado, extension);
         file.transferTo(destinoConNumero);
         logger.info("[SUCCESS] - Renombrado " + file.getOriginalFilename() + " → " + destinoConNumero.getName());
+    }
+
+    String obtenerAnio(String fechaResultado) {
+        if (fechaResultado == null || !fechaResultado.matches("\\d{4}-\\d{2}-\\d{2}_\\d{2}\\.\\d{2}\\.\\d{2}")) {
+            throw new IllegalArgumentException("La fecha no tiene el formato esperado: yyyy-MM-dd_HH.mm.ss");
+        }
+        return fechaResultado.substring(0, 4);
     }
 
     /**
      * Busca el primer nombre disponible agregando un contador incremental.
      */
-    private File generarNombreDisponible(String owner, String fechaResultado, String extension) {
+    private File generarNombreDisponible(File directorioAnio, String fechaResultado, String extension) {
         int contador = 1;
         File candidato;
         do {
-            candidato = new File(UPLOAD_DIR + owner, fechaResultado + "-" + contador + extension);
+            candidato = new File(directorioAnio, fechaResultado + "-" + contador + extension);
             contador++;
         } while (candidato.exists());
         return candidato;
@@ -106,7 +119,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         try {
             return buscarIpSiteLocal();
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error al obtener IP local", e);
+            logger.error("Error al obtener IP local", e);
             return "127.0.0.1";
         }
     }

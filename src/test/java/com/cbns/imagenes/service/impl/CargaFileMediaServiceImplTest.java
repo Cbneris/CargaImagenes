@@ -38,6 +38,16 @@ class CargaFileMediaServiceImplTest {
     }
 
     @Test
+    void testObtenerAnio_FechaNormalizada() {
+        assertEquals("2026", service.obtenerAnio("2026-05-24_12.00.00"));
+    }
+
+    @Test
+    void testObtenerAnio_FechaInvalida() {
+        assertThrows(IllegalArgumentException.class, () -> service.obtenerAnio("Fecha inválida"));
+    }
+
+    @Test
     void testProcesarCargaImagen_ArchivoVacio() {
         MultipartFile file = Mockito.mock(MultipartFile.class);
         Mockito.when(file.isEmpty()).thenReturn(true);
