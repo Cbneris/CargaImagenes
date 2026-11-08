@@ -6,14 +6,17 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Enumeration;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.cbns.imagenes.service.CargaFileMediaService;
 import com.cbns.imagenes.util.DirectorioUtil;
@@ -27,8 +30,8 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
 
     private static final Logger logger = LoggerFactory.getLogger(CargaFileMediaServiceImpl.class);
 
-//    private final String UPLOAD_DIR = "B:\\ShareFolder\\Imagenes\\";
-    private final String UPLOAD_DIR = "C:\\Users\\Christian Neri\\Pictures\\Respaldo_fotos\\";
+    @Value("${upload.dir:/volume1/homes}")
+    private String uploadDir = "/volume1/homes";
 
     @Override
     public ResponseEntity<String> procesarCargaImagen(MultipartFile file, String modifiedDate, String owner) {
@@ -37,8 +40,8 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
             return ResponseEntity.badRequest().body("No se recibió ningún archivo.");
         }
 
-        if (!DirectorioUtil.validaDirectorio(UPLOAD_DIR + owner)) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        if (!esPropietarioValido(owner)) {
+            return ResponseEntity.badRequest().body("El usuario no es válido.");
         }
 
         try (InputStream inputStream = file.getInputStream()) {
@@ -76,9 +79,9 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
      */
     private void guardarArchivo(MultipartFile file, String owner, String fechaResultado, String extension) throws IOException {
         String anio = obtenerAnio(fechaResultado);
-        File directorioAnio = new File(new File(UPLOAD_DIR, owner), anio);
+        File directorioAnio = obtenerDirectorioAnio(owner, anio).toFile();
         if (!DirectorioUtil.validaDirectorio(directorioAnio.getPath())) {
-            throw new IOException("No se pudo crear el directorio para el año " + anio);
+            throw new IOException("No se pudo crear el directorio para el usuario " + owner + " y el año " + anio);
         }
 
         File destino = new File(directorioAnio, fechaResultado + extension);
@@ -92,6 +95,20 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         File destinoConNumero = generarNombreDisponible(directorioAnio, fechaResultado, extension);
         file.transferTo(destinoConNumero);
         logger.info("[SUCCESS] - Renombrado " + file.getOriginalFilename() + " → " + destinoConNumero.getName());
+    }
+
+    Path obtenerDirectorioAnio(String owner, String anio) throws IOException {
+        Path raiz = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path rutaAnio = raiz.resolve(owner).resolve("Photos").resolve(anio).normalize();
+        if (!rutaAnio.startsWith(raiz)) {
+            throw new IOException("La ruta de almacenamiento está fuera del volumen configurado.");
+        }
+        return rutaAnio;
+    }
+
+    private boolean esPropietarioValido(String owner) {
+        return owner != null && owner.matches("[A-Za-z0-9._-]+")
+                && !owner.equals(".") && !owner.equals("..");
     }
 
     String obtenerAnio(String fechaResultado) {
