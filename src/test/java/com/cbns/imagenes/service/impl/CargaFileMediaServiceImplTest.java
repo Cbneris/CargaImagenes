@@ -6,7 +6,9 @@ import org.mockito.Mockito;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -48,12 +50,33 @@ class CargaFileMediaServiceImplTest {
     }
 
     @Test
+    void testObtenerDirectorioAnio_UsaUsuarioPhotosYAnio() throws Exception {
+        assertEquals(
+                Paths.get("/volume1/homes").toAbsolutePath().normalize()
+                        .resolve("christian_neri").resolve("Photos").resolve("2026"),
+                service.obtenerDirectorioAnio("christian_neri", "2026"));
+    }
+
+    @Test
+    void testObtenerDirectorioAnio_RechazaRutaFueraDelVolumen() {
+        assertThrows(IOException.class, () -> service.obtenerDirectorioAnio("..", "2026"));
+    }
+
+    @Test
     void testProcesarCargaImagen_ArchivoVacio() {
         MultipartFile file = Mockito.mock(MultipartFile.class);
         Mockito.when(file.isEmpty()).thenReturn(true);
         ResponseEntity<String> resp = service.procesarCargaImagen(file, "2024-05-24T12:00:00.000Z", "owner");
         assertEquals(400, resp.getStatusCodeValue());
         assertTrue(resp.getBody().contains("No se recibió ningún archivo"));
+    }
+
+    @Test
+    void testProcesarCargaImagen_UsuarioInvalido() {
+        MultipartFile file = Mockito.mock(MultipartFile.class);
+        ResponseEntity<String> resp = service.procesarCargaImagen(file, "2024-05-24T12:00:00.000Z", "../owner");
+        assertEquals(400, resp.getStatusCodeValue());
+        assertEquals("El usuario no es válido.", resp.getBody());
     }
 
     // NOTA: Para pruebas completas de procesarCargaImagen se recomienda usar un entorno con archivos temporales y mocks avanzados.
