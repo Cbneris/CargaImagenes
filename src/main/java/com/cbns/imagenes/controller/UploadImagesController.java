@@ -1,6 +1,5 @@
 package com.cbns.imagenes.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,8 +15,11 @@ import com.cbns.imagenes.service.CargaFileMediaService;
 @CrossOrigin(origins = "http://192.168.1.13:5174")
 public class UploadImagesController {
 
-	@Autowired
-	private CargaFileMediaService cargaFileMediaService;
+	private final CargaFileMediaService cargaFileMediaService;
+
+	public UploadImagesController(CargaFileMediaService cargaFileMediaService) {
+		this.cargaFileMediaService = cargaFileMediaService;
+	}
 	
 	@PostMapping("/upload")
     public ResponseEntity<?> cargaImagenes(
