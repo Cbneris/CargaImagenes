@@ -38,13 +38,13 @@ La raíz `/volume1/homes` se puede cambiar mediante la propiedad `upload.dir` o 
 5. La fecha se normaliza al formato `yyyy-MM-dd_HH.mm.ss`.
 6. El año se extrae de la fecha y se construye la ruta `{raíz}/{usuario}/Photos/{año}`.
 7. El directorio se crea si no existe.
-8. Se guarda la imagen con el nombre basado en la fecha; si ese nombre ya existe, se agrega un contador.
+8. Si el destino ya existe, la carga se rechaza con `409 Conflict`; el archivo se agrega a la lista de problemas y no se reintenta.
 
 ## 4. Endpoint HTTP
 
 ### Interfaz web
 
-Abre `http://localhost:8080/` para seleccionar varias imágenes o videos, ver la lista de archivos pendientes y cargarlos secuencialmente. La interfaz muestra el porcentaje de avance y retira de la lista cada archivo que termina de cargar correctamente. Los archivos que fallen pasan a una lista de problemas y se reintentan hasta dos veces más, después de completar la carga inicial de los demás archivos. Los que sigan fallando quedan identificados como cancelados. Por seguridad, el navegador no expone la ruta absoluta local; se muestra la ruta relativa del archivo o su nombre.
+Abre `http://localhost:9093/` al ejecutar con Docker Compose, o `http://localhost:8080/` al ejecutar Spring Boot directamente. Allí puedes seleccionar varias imágenes o videos, ver la lista de archivos pendientes y cargarlos secuencialmente. La interfaz muestra el porcentaje de avance y retira de la lista cada archivo que termina de cargar correctamente. Los archivos que fallen pasan a una lista de problemas y se reintentan hasta dos veces más, después de completar la carga inicial de los demás archivos. Los que sigan fallando quedan identificados como cancelados. Por seguridad, el navegador no expone la ruta absoluta local; se muestra la ruta relativa del archivo o su nombre.
 
 El selector de usuario obtiene las carpetas disponibles desde la raíz configurada por `upload.dir` o `UPLOAD_DIR` (por defecto, `/volume1/homes`). El destino se organiza bajo `{raíz}/{usuario}/Photos/{año}`.
 
@@ -64,14 +64,18 @@ El endpoint recibe una solicitud `multipart/form-data` con estos campos:
 
 La interfaz envía un archivo por solicitud e itera la lista seleccionada. Para imágenes se conserva la prioridad de fecha EXIF; para videos se utiliza la fecha de modificación del archivo enviada por el navegador.
 
+Si el archivo de destino ya existe, el endpoint responde `409 Conflict` con un mensaje indicando que no se cargó. La interfaz lo conserva en la lista de problemas y lo omite en los reintentos.
+
 ### `POST /cargaImagenes/upload/complete`
 
 La interfaz invoca este endpoint al terminar el lote, después de los reintentos. Recibe `owner` y `uploadedCount` y registra un resumen con el propietario y la cantidad total de archivos cargados correctamente.
 
 Ejemplo con `curl`:
 
+Con Docker Compose, usa el puerto `9093`; al ejecutar Spring Boot directamente, usa `8080`.
+
 ```bash
-curl -X POST http://localhost:8080/cargaImagenes/upload \
+curl -X POST http://localhost:9093/cargaImagenes/upload \
   -F "images=@foto.jpg" \
   -F "modifiedDate=2026-05-24T12:00:00Z" \
   -F "owner=christian_neri"
@@ -81,6 +85,7 @@ Respuestas principales:
 
 - `200 OK`: imagen almacenada; cuerpo `Imagen cargada exitosamente.`
 - `400 Bad Request`: el archivo está vacío o el usuario no es válido.
+- `409 Conflict`: ya existe un archivo con el mismo nombre de destino; no se sobrescribe ni se genera un nombre alternativo.
 - `500 Internal Server Error`: error al leer metadatos, normalizar la fecha, crear el directorio o escribir el archivo. El detalle se registra en el log; el cuerpo de esta respuesta es `null`.
 
 El controlador permite solicitudes CORS desde `http://192.168.1.13:5174`.
@@ -120,7 +125,7 @@ La fecha EXIF original tiene prioridad sobre `modifiedDate`. La lectura de metad
 
 #### `guardarArchivo(MultipartFile file, String owner, String fechaResultado, String extension)`
 
-Extrae el año de `fechaResultado`, solicita la ruta anual a `obtenerDirectorioAnio` y crea los directorios que falten con `DirectorioUtil.validaDirectorio`. Después guarda el archivo con la fecha como nombre base. Si ese nombre exacto ya existe, usa `generarNombreDisponible`. La ruta base `{raíz}/{usuario}/Photos` se registra una sola vez por usuario cuando inicia su primera carga. El log de cada archivo incluye el usuario entre corchetes antes de indicar el renombrado.
+Extrae el año de `fechaResultado`, solicita la ruta anual a `obtenerDirectorioAnio` y crea los directorios que falten con `DirectorioUtil.validaDirectorio`. Guarda el archivo con la fecha como nombre base sin sobrescribir destinos existentes; un duplicado produce `409 Conflict`. La ruta base `{raíz}/{usuario}/Photos` se registra una sola vez por usuario cuando inicia su primera carga. El log de cada archivo incluye el usuario entre corchetes antes de indicar el renombrado.
 
 La extensión del archivo original se conserva. Por ejemplo, una foto `foto.jpg` queda con extensión `.jpg`.
 
@@ -144,7 +149,7 @@ Exige el formato normalizado `yyyy-MM-dd_HH.mm.ss` y devuelve sus primeros cuatr
 
 #### `generarNombreDisponible(File directorioAnio, String fechaResultado, String extension)`
 
-Busca el primer nombre de archivo que no exista, agregando un sufijo numérico antes de la extensión:
+Busca el primer nombre de archivo que no exista, agregando un sufijo numérico antes de la extensión. Se conserva en el código, pero no se usa en las cargas porque crear nombres alternativos podría guardar duplicados:
 
 ```text
 2026-05-24_12.00.00.jpg
@@ -152,7 +157,7 @@ Busca el primer nombre de archivo que no exista, agregando un sufijo numérico a
 2026-05-24_12.00.00-2.jpg
 ```
 
-La búsqueda se realiza dentro de la carpeta del usuario y año. Se considera duplicado cuando ya existe el destino con la misma extensión.
+La búsqueda se realizaría dentro de la carpeta del usuario y año. Actualmente, si ya existe el destino con la misma extensión, la carga se rechaza en lugar de llamar este método.
 
 #### `obtenerIpLocal()`
 
@@ -218,7 +223,7 @@ Con `owner=christian_neri` y `UPLOAD_DIR=/volume1/homes`, el destino es:
 
 Si no hay fecha EXIF original, se procesa `modifiedDate`. La fecha ISO se convierte a la zona horaria del sistema antes de obtener el año y el nombre.
 
-Si el nombre ya está ocupado, se agrega `-1`, `-2`, etc. La extensión no se elimina ni se reemplaza.
+Si el nombre ya está ocupado, la carga se rechaza; el archivo existente no se sobrescribe y el archivo entrante no se reintenta.
 
 ## 7. Configuración de almacenamiento y Docker
 
@@ -254,7 +259,7 @@ El proyecto utiliza Java 17 y Maven. Las dependencias principales incluyen Sprin
 
 ## 8. Pruebas existentes
 
-`CargaFileMediaServiceImplTest` verifica la obtención de IP, la extracción de extensiones, la extracción del año, la ruta por usuario/año, el rechazo de una ruta fuera del volumen y los rechazos de archivo vacío y usuario inválido. La prueba de contexto verifica que Spring Boot pueda iniciar el contexto de la aplicación.
+`CargaFileMediaServiceImplTest` verifica la obtención de IP, la extracción de extensiones, la extracción del año, la ruta por usuario/año, el rechazo de rutas fuera del volumen, los rechazos de archivos vacíos, usuarios inválidos y destinos duplicados sin sobrescribir el archivo existente. La prueba de contexto verifica que Spring Boot pueda iniciar el contexto de la aplicación.
 
 ## 9. Historial de cambios
 
@@ -263,7 +268,8 @@ El proyecto utiliza Java 17 y Maven. Las dependencias principales incluyen Sprin
 - Se agregó una interfaz web para seleccionar varias imágenes y videos, mantenerlos en una lista y cargarlos secuencialmente con indicador de progreso y reintentos automáticos para archivos fallidos.
 - Se añadió el porcentaje de avance; los archivos cargados se retiran de la lista y los fallidos se reintentan hasta dos veces después de completar la carga inicial.
 - Se agregó al log la ruta `{raíz}/{usuario}/Photos` una sola vez por usuario, el usuario en los mensajes de renombrado y un resumen final por lote con la cantidad cargada.
+- Se deshabilitó el uso de nombres alternativos para duplicados: el servidor responde `409 Conflict`, la interfaz lista el archivo y no lo reintenta. Se conserva `generarNombreDisponible` sin llamadas.
 - Se agregó `GET /cargaImagenes/owners` para poblar el selector con las carpetas de usuario existentes bajo la raíz de almacenamiento configurada.
 - Se habilitó el uso de la fecha de modificación del archivo para videos; las imágenes conservan la prioridad de fecha EXIF.
 - Se documentó que el navegador no expone la ruta absoluta local; la interfaz conserva los archivos seleccionados y muestra su nombre o ruta relativa.
-- Se validó el cambio ejecutando `mvn test` (12 pruebas aprobadas).
+- Se validó el cambio ejecutando `mvn test` (14 pruebas aprobadas).

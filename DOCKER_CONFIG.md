@@ -20,7 +20,7 @@ docker build -t carga-imagenes:1.0.0 .
 Ejemplo que monta `/volume1/homes` del NAS en la misma ruta dentro del contenedor:
 
 ```bash
-docker run -d -p 8080:8080 -v "/volume1/homes:/volume1/homes" -e UPLOAD_DIR=/volume1/homes --name carga-imagenes carga-imagenes:1.0.0
+docker run -d -p 9093:8080 -v "/volume1/homes:/volume1/homes" -e UPLOAD_DIR=/volume1/homes --name carga-imagenes carga-imagenes:1.0.0
 ```
 
 Las imágenes de cada usuario se guardan en `/volume1/homes/{usuario}/Photos/{año}`. Por ejemplo, las imágenes de `christian_neri` tomadas en 2026 se guardan en `/volume1/homes/christian_neri/Photos/2026`.
@@ -39,7 +39,7 @@ services:
     image: carga-imagenes:1.0.0
     build: .
     ports:
-      - "8080:8080"
+      - "9093:8080"
     environment:
       - UPLOAD_DIR=/volume1/homes
       - LOGGING_FILE_NAME=/volume1/homes/admin/uploadImages/carga-imagenes.log

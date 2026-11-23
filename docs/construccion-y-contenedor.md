@@ -30,7 +30,7 @@ Con la imagen creada, ejecuta este comando en el host que tenga disponible la ru
 ```bash
 docker run -d \
   --name carga-imagenes \
-  -p 8080:8080 \
+  -p 9093:8080 \
   -e UPLOAD_DIR=/volume1/homes \
   -e LOGGING_FILE_NAME=/volume1/homes/admin/uploadImages/carga-imagenes.log \
   -v /volume1/homes:/volume1/homes \
@@ -47,7 +47,7 @@ docker ps
 docker logs -f carga-imagenes
 ```
 
-La API queda disponible en `http://localhost:8080`. Para detener el contenedor, ejecuta `docker stop carga-imagenes`; para volver a iniciarlo, ejecuta `docker start carga-imagenes`.
+La API queda disponible en `http://localhost:9093`; Docker publica el puerto 9093 del host hacia el puerto 8080 de la aplicación en el contenedor. Para detener el contenedor, ejecuta `docker stop carga-imagenes`; para volver a iniciarlo, ejecuta `docker start carga-imagenes`.
 
 ## Alternativa: construir y ejecutar con Docker Compose
 

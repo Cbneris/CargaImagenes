@@ -3,7 +3,7 @@ services:
     image: carga-imagenes:1.0.0
     build: .
     ports:
-      - "8080:8080"
+      - "9093:8080"
     environment:
       - UPLOAD_DIR=/volume1/homes
       - LOGGING_FILE_NAME=/volume1/homes/admin/uploadImages/carga-imagenes.log
