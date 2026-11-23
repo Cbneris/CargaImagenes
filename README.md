@@ -42,6 +42,16 @@ La raíz `/volume1/homes` se puede cambiar mediante la propiedad `upload.dir` o 
 
 ## 4. Endpoint HTTP
 
+### Interfaz web
+
+Abre `http://localhost:8080/` para seleccionar varias imágenes o videos, ver la lista de archivos pendientes y cargarlos secuencialmente. La interfaz mantiene los archivos seleccionados en el navegador y permite reintentar los que fallen. Por seguridad, el navegador no expone la ruta absoluta local; se muestra la ruta relativa del archivo o su nombre.
+
+El selector de usuario obtiene las carpetas disponibles desde la raíz configurada por `upload.dir` o `UPLOAD_DIR` (por defecto, `/volume1/homes`). El destino se organiza bajo `{raíz}/{usuario}/Photos/{año}`.
+
+### `GET /cargaImagenes/owners`
+
+Devuelve los nombres de las carpetas de usuario encontradas directamente bajo la raíz de almacenamiento. La interfaz usa estos valores para llenar el selector de usuario.
+
 ### `POST /cargaImagenes/upload`
 
 El endpoint recibe una solicitud `multipart/form-data` con estos campos:
@@ -51,6 +61,8 @@ El endpoint recibe una solicitud `multipart/form-data` con estos campos:
 | `images` | Archivo | Imagen que se va a almacenar. |
 | `modifiedDate` | Texto | Fecha proporcionada por el cliente; se usa cuando la imagen no contiene fecha EXIF original. |
 | `owner` | Texto | Nombre de usuario que determina el directorio de destino. |
+
+La interfaz envía un archivo por solicitud e itera la lista seleccionada. Para imágenes se conserva la prioridad de fecha EXIF; para videos se utiliza la fecha de modificación del archivo enviada por el navegador.
 
 Ejemplo con `curl`:
 
@@ -239,3 +251,13 @@ El proyecto utiliza Java 17 y Maven. Las dependencias principales incluyen Sprin
 ## 8. Pruebas existentes
 
 `CargaFileMediaServiceImplTest` verifica la obtención de IP, la extracción de extensiones, la extracción del año, la ruta por usuario/año, el rechazo de una ruta fuera del volumen y los rechazos de archivo vacío y usuario inválido. La prueba de contexto verifica que Spring Boot pueda iniciar el contexto de la aplicación.
+
+## 9. Historial de cambios
+
+### 2026-11-22
+
+- Se agregó una interfaz web para seleccionar varias imágenes y videos, mantenerlos en una lista y cargarlos secuencialmente con indicador de progreso y opción de reintentar archivos fallidos.
+- Se agregó `GET /cargaImagenes/owners` para poblar el selector con las carpetas de usuario existentes bajo la raíz de almacenamiento configurada.
+- Se habilitó el uso de la fecha de modificación del archivo para videos; las imágenes conservan la prioridad de fecha EXIF.
+- Se documentó que el navegador no expone la ruta absoluta local; la interfaz conserva los archivos seleccionados y muestra su nombre o ruta relativa.
+- Se validó el cambio ejecutando `mvn test` (12 pruebas aprobadas).
