@@ -26,6 +26,7 @@ La raíz `/volume1/homes` se puede cambiar mediante la propiedad `upload.dir` o 
 - [`CargaFileMediaServiceImpl.java`](src/main/java/com/cbns/imagenes/service/impl/CargaFileMediaServiceImpl.java): procesamiento, lectura de fechas y almacenamiento de imágenes.
 - [`FechaUtil.java`](src/main/java/com/cbns/imagenes/util/FechaUtil.java): normalización de fechas EXIF y fechas ISO.
 - [`DirectorioUtil.java`](src/main/java/com/cbns/imagenes/util/DirectorioUtil.java): creación de directorios.
+- `src/main/resources/static/index.html`, `css/styles.css` y `js/app.js`: estructura separada de la interfaz web, estilos y lógica JavaScript.
 - [`application.properties`](src/main/resources/application.properties): nombre de la aplicación, logging y límites de archivos.
 - [`docker-compose.yml`](docker-compose.yml) y [`Dockerfile`](Dockerfile): configuración para ejecutar la aplicación en Docker.
 
@@ -266,6 +267,7 @@ El proyecto utiliza Java 17 y Maven. Las dependencias principales incluyen Sprin
 ### 2026-11-22
 
 - Se agregó una interfaz web para seleccionar varias imágenes y videos, mantenerlos en una lista y cargarlos secuencialmente con indicador de progreso y reintentos automáticos para archivos fallidos.
+- Se separaron la página, los estilos y la lógica del navegador en `static/index.html`, `static/css/styles.css` y `static/js/app.js`.
 - Se añadió el porcentaje de avance; los archivos cargados se retiran de la lista y los fallidos se reintentan hasta dos veces después de completar la carga inicial.
 - Se agregó al log la ruta `{raíz}/{usuario}/Photos` una sola vez por usuario, el usuario en los mensajes de renombrado y un resumen final por lote con la cantidad cargada.
 - Se deshabilitó el uso de nombres alternativos para duplicados: el servidor responde `409 Conflict`, la interfaz lista el archivo y no lo reintenta. Se conserva `generarNombreDisponible` sin llamadas.
