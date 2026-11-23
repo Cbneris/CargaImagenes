@@ -225,7 +225,7 @@ Si el nombre ya está ocupado, se agrega `-1`, `-2`, etc. La extensión no se el
 ### Variables y propiedades
 
 - `UPLOAD_DIR`: directorio raíz de los homes. Por defecto es `/volume1/homes`.
-- `LOGGING_FILE_NAME`: ruta del archivo de log configurada en Docker. En el archivo de propiedades se declara `C:/logs/carga_imagenes/carga-imagenes.log`.
+- `LOGGING_FILE_NAME`: ruta del archivo de log configurada en Docker y en `application.properties`: `/volume1/homes/admin/uploadImages/carga-imagenes.log`.
 - `spring.servlet.multipart.max-file-size` y `spring.servlet.multipart.max-request-size`: límites configurados en `application.properties` a `4096MB`.
 
 En Docker Compose, el volumen del NAS se monta en `/volume1/homes`, y se declara `UPLOAD_DIR=/volume1/homes`. Asegura que la ruta de origen exista en el host del contenedor y que el proceso tenga permiso de escritura. Para los detalles del despliegue, consulta [`DOCKER_CONFIG.md`](DOCKER_CONFIG.md).

@@ -34,7 +34,6 @@ Los logs se escriben en `/volume1/homes/admin/uploadImages/carga-imagenes.log`. 
 El archivo incluido monta el volumen del NAS para las imágenes y para el archivo de log:
 
 ```yaml
-version: "3.8"
 services:
   carga-imagenes:
     image: carga-imagenes:latest
