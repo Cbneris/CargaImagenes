@@ -122,6 +122,15 @@
     </div>
     <p class="hint">El navegador no permite leer la ruta absoluta del equipo. Se conserva cada archivo seleccionado para cargarlo directamente.</p>
 
+    <div class="actions">
+        <button id="upload-button" class="primary" type="button" disabled>Cargar archivos</button>
+        <div class="progress-indicator">
+            <progress id="upload-progress" max="100" value="0" aria-label="Progreso de carga"></progress>
+            <span id="progress" aria-live="polite">0%</span>
+        </div>
+    </div>
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+
     <div class="list-heading">
         <h2>Archivos seleccionados <span id="file-count">(0)</span></h2>
         <button id="clear-button" type="button" disabled>Limpiar lista</button>
@@ -132,15 +141,6 @@
         <h2>Archivos con problemas <span id="problem-count">(0)</span></h2>
     </div>
     <ul id="problem-list" class="file-list"></ul>
-
-    <div class="actions">
-        <button id="upload-button" class="primary" type="button" disabled>Cargar archivos</button>
-        <div class="progress-indicator">
-            <progress id="upload-progress" max="100" value="0" aria-label="Progreso de carga"></progress>
-            <span id="progress" aria-live="polite">0%</span>
-        </div>
-    </div>
-    <p id="message" class="message" role="status" aria-live="polite"></p>
 </main>
 
 <script>
