@@ -26,6 +26,8 @@ La raíz `/volume1/homes` se puede cambiar mediante la propiedad `upload.dir` o 
 - [`CargaFileMediaServiceImpl.java`](src/main/java/com/cbns/imagenes/service/impl/CargaFileMediaServiceImpl.java): procesamiento, lectura de fechas y almacenamiento de imágenes.
 - [`FechaUtil.java`](src/main/java/com/cbns/imagenes/util/FechaUtil.java): normalización de fechas EXIF y fechas ISO.
 - [`DirectorioUtil.java`](src/main/java/com/cbns/imagenes/util/DirectorioUtil.java): creación de directorios.
+- [`MensajesSistema.java`](src/main/java/com/cbns/imagenes/constantes/MensajesSistema.java): constantes centralizadas de mensajes y logs del sistema.
+- [`ConstantesTecnicas.java`](src/main/java/com/cbns/imagenes/constantes/ConstantesTecnicas.java): rutas, parámetros, formatos, expresiones regulares y otros valores técnicos.
 - `src/main/resources/static/index.html`, `css/styles.css` y `js/app.js`: estructura separada de la interfaz web, estilos y lógica JavaScript.
 - [`application.properties`](src/main/resources/application.properties): nombre de la aplicación, logging y límites de archivos.
 - [`docker-compose.yml`](docker-compose.yml) y [`Dockerfile`](Dockerfile): configuración para ejecutar la aplicación en Docker.
@@ -274,4 +276,6 @@ El proyecto utiliza Java 17 y Maven. Las dependencias principales incluyen Sprin
 - Se agregó `GET /cargaImagenes/owners` para poblar el selector con las carpetas de usuario existentes bajo la raíz de almacenamiento configurada.
 - Se habilitó el uso de la fecha de modificación del archivo para videos; las imágenes conservan la prioridad de fecha EXIF.
 - Se documentó que el navegador no expone la ruta absoluta local; la interfaz conserva los archivos seleccionados y muestra su nombre o ruta relativa.
+- Se centralizaron los mensajes de respuesta, validación y log en `MensajesSistema`, dentro del paquete `constantes`.
+- Se centralizaron rutas, parámetros HTTP, formatos de fecha, expresiones regulares y valores técnicos en `ConstantesTecnicas`.
 - Se validó el cambio ejecutando `mvn test` (14 pruebas aprobadas).

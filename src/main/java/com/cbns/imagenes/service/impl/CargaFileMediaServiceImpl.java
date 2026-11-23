@@ -25,6 +25,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.cbns.imagenes.constantes.ConstantesTecnicas;
+import com.cbns.imagenes.constantes.MensajesSistema;
 import com.cbns.imagenes.service.CargaFileMediaService;
 import com.cbns.imagenes.util.DirectorioUtil;
 import com.cbns.imagenes.util.FechaUtil;
@@ -37,19 +39,19 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
 
     private static final Logger logger = LoggerFactory.getLogger(CargaFileMediaServiceImpl.class);
 
-    @Value("${upload.dir:/volume1/homes}")
-    private String uploadDir = "/volume1/homes";
+    @Value(ConstantesTecnicas.PROPIEDAD_DIRECTORIO_UPLOAD)
+    private String uploadDir = ConstantesTecnicas.DIRECTORIO_HOMES;
     private final Set<String> ownersWithLoggedStoragePath = ConcurrentHashMap.newKeySet();
 
     @Override
     public ResponseEntity<String> procesarCargaImagen(MultipartFile file, String modifiedDate, String owner) {
 
         if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body("No se recibió ningún archivo.");
+            return ResponseEntity.badRequest().body(MensajesSistema.ERROR_ARCHIVO_VACIO);
         }
 
         if (!esPropietarioValido(owner)) {
-            return ResponseEntity.badRequest().body("El usuario no es válido.");
+            return ResponseEntity.badRequest().body(MensajesSistema.ERROR_PROPIETARIO_INVALIDO);
         }
 
         logStoragePathOnce(owner);
@@ -64,36 +66,36 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
             String nombreArchivo = e.getFile() == null
                     ? file.getOriginalFilename()
                     : Paths.get(e.getFile()).getFileName().toString();
-            String mensaje = "El archivo " + nombreArchivo + " ya existe y no se cargó.";
-            logger.warn("[DUPLICATE] - [{}] Se omitió {} porque ya existe el destino {}.",
+            String mensaje = MensajesSistema.ERROR_ARCHIVO_DUPLICADO.formatted(nombreArchivo);
+            logger.warn(MensajesSistema.LOG_ARCHIVO_DUPLICADO,
                     owner, file.getOriginalFilename(), nombreArchivo);
             return ResponseEntity.status(HttpStatus.CONFLICT).body(mensaje);
         } catch (Exception e) {
-            logger.error("Error al procesar la carga de imagen", e);
+            logger.error(MensajesSistema.ERROR_PROCESAR_CARGA, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
 
-        return ResponseEntity.ok("Imagen cargada exitosamente.");
+        return ResponseEntity.ok(MensajesSistema.CARGA_EXITOSA);
     }
 
     @Override
     public ResponseEntity<String> registrarResumenCarga(String owner, int cantidadCargada) {
         if (!esPropietarioValido(owner)) {
-            return ResponseEntity.badRequest().body("El usuario no es válido.");
+            return ResponseEntity.badRequest().body(MensajesSistema.ERROR_PROPIETARIO_INVALIDO);
         }
         if (cantidadCargada < 0) {
-            return ResponseEntity.badRequest().body("La cantidad de archivos no puede ser negativa.");
+            return ResponseEntity.badRequest().body(MensajesSistema.ERROR_CANTIDAD_ARCHIVOS_NEGATIVA);
         }
 
-        logger.info("[{}] Carga finalizada: {} archivo(s) cargado(s).", owner, cantidadCargada);
-        return ResponseEntity.ok("Resumen de carga registrado.");
+        logger.info(MensajesSistema.LOG_RESUMEN_CARGA, owner, cantidadCargada);
+        return ResponseEntity.ok(MensajesSistema.RESUMEN_CARGA_REGISTRADO);
     }
 
     private void logStoragePathOnce(String owner) {
         if (ownersWithLoggedStoragePath.add(owner)) {
             Path rutaPropietario = Paths.get(uploadDir).toAbsolutePath().normalize()
-                    .resolve(owner).resolve("Photos");
-            logger.info("[UPLOAD] Directorio de almacenamiento para {}: {}", owner, rutaPropietario);
+                    .resolve(owner).resolve(ConstantesTecnicas.DIRECTORIO_FOTOS);
+            logger.info(MensajesSistema.LOG_DIRECTORIO_ALMACENAMIENTO, owner, rutaPropietario);
         }
     }
 
@@ -101,7 +103,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
     public List<String> obtenerOwnersDisponibles() throws IOException {
         Path raiz = Paths.get(uploadDir).toAbsolutePath().normalize();
         if (!Files.isDirectory(raiz)) {
-            throw new IOException("El directorio de usuarios no existe o no es accesible: " + raiz);
+            throw new IOException(MensajesSistema.ERROR_DIRECTORIO_USUARIOS.formatted(raiz));
         }
 
         try (Stream<Path> directorios = Files.list(raiz)) {
@@ -118,8 +120,8 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
      * Determina la fecha a usar como nombre de archivo: EXIF si existe, si no la del cliente.
      */
     private String resolverFecha(InputStream inputStream, String fechaCliente, String contentType) throws Exception {
-        if (contentType != null && contentType.startsWith("video/")) {
-            logger.info("[FechaModificación]");
+        if (contentType != null && contentType.startsWith(ConstantesTecnicas.PREFIJO_MIME_VIDEO)) {
+            logger.info(MensajesSistema.LOG_FECHA_MODIFICACION);
             return FechaUtil.normalizarFecha(fechaCliente);
         }
 
@@ -127,11 +129,11 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         ExifSubIFDDirectory exif = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
 
         if (exif != null && exif.containsTag(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL)) {
-            logger.info("[FechaOriginal]");
+            logger.info(MensajesSistema.LOG_FECHA_ORIGINAL);
             return FechaUtil.normalizarFecha(exif.getString(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL));
         }
 
-        logger.info("[FechaModificación]");
+        logger.info(MensajesSistema.LOG_FECHA_MODIFICACION);
         return FechaUtil.normalizarFecha(fechaCliente);
     }
 
@@ -142,7 +144,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         String anio = obtenerAnio(fechaResultado);
         File directorioAnio = obtenerDirectorioAnio(owner, anio).toFile();
         if (!DirectorioUtil.validaDirectorio(directorioAnio.getPath())) {
-            throw new IOException("No se pudo crear el directorio para el usuario " + owner + " y el año " + anio);
+            throw new IOException(MensajesSistema.ERROR_CREAR_DIRECTORIO_ANUAL.formatted(owner, anio));
         }
 
         File destino = new File(directorioAnio, fechaResultado + extension);
@@ -155,26 +157,29 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
             Files.copy(inputStream, destino.toPath());
         }
 
-        logger.info("[SUCCESS] - [{}] Renombrado {} -> {}", owner, file.getOriginalFilename(), destino.getName());
+        logger.info(MensajesSistema.LOG_ARCHIVO_RENOMBRADO,
+                owner, file.getOriginalFilename(), destino.getName());
     }
 
     Path obtenerDirectorioAnio(String owner, String anio) throws IOException {
         Path raiz = Paths.get(uploadDir).toAbsolutePath().normalize();
-        Path rutaAnio = raiz.resolve(owner).resolve("Photos").resolve(anio).normalize();
+        Path rutaAnio = raiz.resolve(owner).resolve(ConstantesTecnicas.DIRECTORIO_FOTOS).resolve(anio).normalize();
         if (!rutaAnio.startsWith(raiz)) {
-            throw new IOException("La ruta de almacenamiento está fuera del volumen configurado.");
+            throw new IOException(MensajesSistema.ERROR_RUTA_FUERA_VOLUMEN);
         }
         return rutaAnio;
     }
 
     private boolean esPropietarioValido(String owner) {
-        return owner != null && owner.matches("[A-Za-z0-9._-]+")
-                && !owner.equals(".") && !owner.equals("..");
+        return owner != null && owner.matches(ConstantesTecnicas.PATRON_PROPIETARIO)
+                && !owner.equals(ConstantesTecnicas.DIRECTORIO_ACTUAL)
+                && !owner.equals(ConstantesTecnicas.DIRECTORIO_PADRE);
     }
 
     String obtenerAnio(String fechaResultado) {
-        if (fechaResultado == null || !fechaResultado.matches("\\d{4}-\\d{2}-\\d{2}_\\d{2}\\.\\d{2}\\.\\d{2}")) {
-            throw new IllegalArgumentException("La fecha no tiene el formato esperado: yyyy-MM-dd_HH.mm.ss");
+        if (fechaResultado == null || !fechaResultado.matches(ConstantesTecnicas.PATRON_FECHA_NORMALIZADA)) {
+            throw new IllegalArgumentException(
+                    MensajesSistema.ERROR_FORMATO_FECHA.formatted(ConstantesTecnicas.FORMATO_FECHA_NORMALIZADA));
         }
         return fechaResultado.substring(0, 4);
     }
@@ -187,7 +192,8 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         int contador = 1;
         File candidato;
         do {
-            candidato = new File(directorioAnio, fechaResultado + "-" + contador + extension);
+            candidato = new File(directorioAnio,
+                    fechaResultado + ConstantesTecnicas.SEPARADOR_SUFIJO_DUPLICADO + contador + extension);
             contador++;
         } while (candidato.exists());
         return candidato;
@@ -198,8 +204,8 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         try {
             return buscarIpSiteLocal();
         } catch (Exception e) {
-            logger.error("Error al obtener IP local", e);
-            return "127.0.0.1";
+            logger.error(MensajesSistema.ERROR_OBTENER_IP_LOCAL, e);
+            return ConstantesTecnicas.IP_LOCAL_FALLBACK;
         }
     }
 
@@ -214,7 +220,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
                 return ip;
             }
         }
-        return "127.0.0.1";
+        return ConstantesTecnicas.IP_LOCAL_FALLBACK;
     }
 
     private String buscarPrimeraIpValida(NetworkInterface ni) {
@@ -230,6 +236,6 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
 
     public String obtenerExtension(String filename) {
         int punto = filename.lastIndexOf('.');
-        return (punto > 0) ? filename.substring(punto) : "";
+        return (punto > 0) ? filename.substring(punto) : ConstantesTecnicas.CADENA_VACIA;
     }
 }

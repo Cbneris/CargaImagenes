@@ -8,31 +8,34 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
+import com.cbns.imagenes.constantes.ConstantesTecnicas;
+import com.cbns.imagenes.constantes.MensajesSistema;
+
 public class FechaUtil {
     public static String normalizarFecha(String fecha) {
-        if (fecha.matches("\\d{4}-\\d{2}-\\d{2}_\\d{2}\\.\\d{2}\\.\\d{2}")) {
+        if (fecha.matches(ConstantesTecnicas.PATRON_FECHA_NORMALIZADA)) {
             return fecha;
         }
 
-        if (fecha.matches("\\d{4}:\\d{2}:\\d{2} \\d{2}:\\d{2}:\\d{2}")) {
+        if (fecha.matches(ConstantesTecnicas.PATRON_FECHA_EXIF)) {
             try {
-                return new SimpleDateFormat("yyyy-MM-dd_HH.mm.ss")
-                        .format(new SimpleDateFormat("yyyy:MM:dd HH:mm:ss").parse(fecha));
+                return new SimpleDateFormat(ConstantesTecnicas.FORMATO_FECHA_NORMALIZADA)
+                        .format(new SimpleDateFormat(ConstantesTecnicas.FORMATO_FECHA_EXIF).parse(fecha));
             } catch (ParseException e) {
-                return "Fecha EXIF inválida";
+                return MensajesSistema.ERROR_FECHA_EXIF_INVALIDA;
             }
         }
 
-        if (fecha.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*")) {
+        if (fecha.matches(ConstantesTecnicas.PATRON_FECHA_ISO)) {
             try {
                 Instant instant = Instant.parse(fecha);
                 LocalDateTime ldt = instant.atZone(ZoneId.systemDefault()).toLocalDateTime();
-                return DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss").format(ldt);
+                return DateTimeFormatter.ofPattern(ConstantesTecnicas.FORMATO_FECHA_NORMALIZADA).format(ldt);
             } catch (DateTimeParseException e) {
-                return "Fecha ISO inválida";
+                return MensajesSistema.ERROR_FECHA_ISO_INVALIDA;
             }
         }
 
-        return "Formato desconocido: " + fecha;
+        return MensajesSistema.ERROR_FORMATO_FECHA_DESCONOCIDO.formatted(fecha);
     }
 }
