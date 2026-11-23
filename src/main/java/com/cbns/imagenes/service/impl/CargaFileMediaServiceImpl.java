@@ -6,9 +6,13 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Enumeration;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +49,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         }
 
         try (InputStream inputStream = file.getInputStream()) {
-            String fechaResultado = resolverFecha(inputStream, modifiedDate);
+            String fechaResultado = resolverFecha(inputStream, modifiedDate, file.getContentType());
             String extension = obtenerExtension(file.getOriginalFilename());
 
             guardarArchivo(file, owner, fechaResultado, extension);
@@ -58,10 +62,32 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         return ResponseEntity.ok("Imagen cargada exitosamente.");
     }
 
+    @Override
+    public List<String> obtenerOwnersDisponibles() throws IOException {
+        Path raiz = Paths.get(uploadDir).toAbsolutePath().normalize();
+        if (!Files.isDirectory(raiz)) {
+            throw new IOException("El directorio de usuarios no existe o no es accesible: " + raiz);
+        }
+
+        try (Stream<Path> directorios = Files.list(raiz)) {
+            return directorios
+                    .filter(Files::isDirectory)
+                    .map(path -> path.getFileName().toString())
+                    .filter(this::esPropietarioValido)
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .collect(Collectors.toList());
+        }
+    }
+
     /**
      * Determina la fecha a usar como nombre de archivo: EXIF si existe, si no la del cliente.
      */
-    private String resolverFecha(InputStream inputStream, String fechaCliente) throws Exception {
+    private String resolverFecha(InputStream inputStream, String fechaCliente, String contentType) throws Exception {
+        if (contentType != null && contentType.startsWith("video/")) {
+            logger.info("[FechaModificación]");
+            return FechaUtil.normalizarFecha(fechaCliente);
+        }
+
         Metadata metadata = ImageMetadataReader.readMetadata(inputStream);
         ExifSubIFDDirectory exif = metadata.getFirstDirectoryOfType(ExifSubIFDDirectory.class);
 

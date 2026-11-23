@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Carga de archivos multimedia</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #172033;
+            background: #f3f6fb;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px 18px;
+        }
+
+        main {
+            width: min(760px, 100%);
+            margin: 0 auto;
+            padding: 32px;
+            border: 1px solid #e1e7f0;
+            border-radius: 16px;
+            background: #fff;
+            box-shadow: 0 12px 36px #17203312;
+        }
+
+        h1 { margin: 0 0 8px; font-size: 1.7rem; }
+        p { color: #58647a; line-height: 1.5; }
+        label { display: block; margin: 24px 0 8px; font-weight: 600; }
+
+        select, button {
+            min-height: 44px;
+            border: 1px solid #cbd4e2;
+            border-radius: 8px;
+            font: inherit;
+        }
+
+        select { width: 100%; padding: 0 12px; background: white; }
+        button { padding: 0 16px; cursor: pointer; }
+        button:disabled { cursor: not-allowed; opacity: .55; }
+
+        .picker {
+            display: flex;
+            min-height: 126px;
+            margin-top: 24px;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #bdc9dc;
+            border-radius: 12px;
+            background: #f8faff;
+            text-align: center;
+        }
+
+        .picker label { margin: 0; padding: 20px; color: #2456a6; cursor: pointer; }
+        .picker input { display: block; max-width: 100%; margin-top: 12px; color: #58647a; }
+        .hint { margin: 8px 0 0; font-size: .9rem; }
+
+        .list-heading {
+            display: flex;
+            margin-top: 28px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .list-heading h2 { margin: 0; font-size: 1.1rem; }
+        .file-list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+
+        .file-item {
+            display: flex;
+            min-width: 0;
+            padding: 12px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border: 1px solid #e1e7f0;
+            border-radius: 8px;
+        }
+
+        .file-info { min-width: 0; }
+        .file-path { overflow-wrap: anywhere; font-weight: 600; }
+        .file-status { margin-top: 4px; color: #58647a; font-size: .85rem; }
+        .remove-button { min-width: 42px; padding: 0 10px; color: #9c2635; }
+        .actions { display: flex; margin-top: 24px; align-items: center; gap: 12px; }
+        .primary { border-color: #2456a6; background: #2456a6; color: #fff; font-weight: 600; }
+        .message { min-height: 24px; margin: 16px 0 0; }
+        .message.error { color: #a32132; }
+        .message.success { color: #176b44; }
+
+        @media (max-width: 560px) {
+            body { padding: 18px 10px; }
+            main { padding: 22px 16px; }
+            .actions { align-items: stretch; flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Carga de archivos multimedia</h1>
+    <p>Selecciona imágenes o videos, elige la carpeta de usuario y carga los archivos.</p>
+
+    <label for="owner">Carpeta de usuario</label>
+    <select id="owner" disabled>
+        <option value="">Cargando usuarios...</option>
+    </select>
+    <p id="destination" class="hint">La carpeta de destino se determina con el usuario seleccionado.</p>
+
+    <div class="picker">
+        <label for="files">
+            Seleccionar archivos
+            <input id="files" type="file" accept="image/*,video/*" multiple>
+        </label>
+    </div>
+    <p class="hint">El navegador no permite leer la ruta absoluta del equipo. Se conserva cada archivo seleccionado para cargarlo directamente.</p>
+
+    <div class="list-heading">
+        <h2>Archivos seleccionados <span id="file-count">(0)</span></h2>
+        <button id="clear-button" type="button" disabled>Limpiar lista</button>
+    </div>
+    <ul id="file-list" class="file-list"></ul>
+
+    <div class="actions">
+        <button id="upload-button" class="primary" type="button" disabled>Cargar archivos</button>
+        <span id="progress" aria-live="polite"></span>
+    </div>
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+</main>
+
+<script>
+    const fileInput = document.getElementById("files");
+    const ownerSelect = document.getElementById("owner");
+    const fileList = document.getElementById("file-list");
+    const fileCount = document.getElementById("file-count");
+    const uploadButton = document.getElementById("upload-button");
+    const clearButton = document.getElementById("clear-button");
+    const progress = document.getElementById("progress");
+    const message = document.getElementById("message");
+    const destination = document.getElementById("destination");
+    const selectedFiles = [];
+    let uploading = false;
+
+    function updateButtons() {
+        const hasPending = selectedFiles.some(item => item.status !== "Cargado");
+        uploadButton.disabled = uploading || !ownerSelect.value || !hasPending;
+        clearButton.disabled = uploading || selectedFiles.length === 0;
+        fileInput.disabled = uploading;
+    }
+
+    function renderFiles() {
+        fileList.replaceChildren();
+        fileCount.textContent = `(${selectedFiles.length})`;
+
+        for (const [index, item] of selectedFiles.entries()) {
+            const row = document.createElement("li");
+            row.className = "file-item";
+
+            const info = document.createElement("div");
+            info.className = "file-info";
+
+            const path = document.createElement("div");
+            path.className = "file-path";
+            path.textContent = item.file.webkitRelativePath || item.file.name;
+
+            const status = document.createElement("div");
+            status.className = "file-status";
+            status.textContent = `${formatSize(item.file.size)} · ${item.status}`;
+            info.append(path, status);
+
+            const remove = document.createElement("button");
+            remove.className = "remove-button";
+            remove.type = "button";
+            remove.textContent = "Quitar";
+            remove.setAttribute("aria-label", `Quitar ${item.file.name}`);
+            remove.disabled = uploading;
+            remove.addEventListener("click", () => {
+                selectedFiles.splice(index, 1);
+                renderFiles();
+                updateButtons();
+            });
+
+            row.append(info, remove);
+            fileList.append(row);
+        }
+        updateButtons();
+    }
+
+    function formatSize(bytes) {
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    fileInput.addEventListener("change", () => {
+        for (const file of fileInput.files) {
+            selectedFiles.push({ file, status: "Pendiente" });
+        }
+        fileInput.value = "";
+        message.textContent = "";
+        renderFiles();
+    });
+
+    ownerSelect.addEventListener("change", () => {
+        destination.textContent = ownerSelect.value
+            ? `Destino: ${ownerSelect.value}/Photos/{año} dentro de la raíz configurada.`
+            : "La carpeta de destino se determina con el usuario seleccionado.";
+        updateButtons();
+    });
+
+    clearButton.addEventListener("click", () => {
+        selectedFiles.length = 0;
+        progress.textContent = "";
+        message.textContent = "";
+        renderFiles();
+    });
+
+    uploadButton.addEventListener("click", async () => {
+        const pending = selectedFiles.filter(item => item.status !== "Cargado");
+        uploading = true;
+        message.className = "message";
+        message.textContent = "";
+        renderFiles();
+
+        let completed = 0;
+        let failed = 0;
+        try {
+            for (const item of pending) {
+                item.status = "Cargando...";
+                progress.textContent = `Cargando ${completed + failed + 1} de ${pending.length}`;
+                renderFiles();
+
+                const form = new FormData();
+                form.append("images", item.file, item.file.name);
+                form.append("modifiedDate", new Date(item.file.lastModified).toISOString());
+                form.append("owner", ownerSelect.value);
+
+                try {
+                    const response = await fetch("/cargaImagenes/upload", {
+                        method: "POST",
+                        body: form
+                    });
+                    if (!response.ok) {
+                        const detail = await response.text();
+                        throw new Error(detail || `Error HTTP ${response.status}`);
+                    }
+                    item.status = "Cargado";
+                    completed++;
+                } catch (error) {
+                    item.status = "Error";
+                    failed++;
+                    message.textContent = `${item.file.name}: ${error.message}`;
+                    message.className = "message error";
+                }
+                renderFiles();
+            }
+
+            progress.textContent = `Proceso terminado: ${completed} cargado(s), ${failed} con error.`;
+            if (failed === 0) {
+                message.textContent = "Todos los archivos pendientes se cargaron correctamente.";
+                message.className = "message success";
+            }
+        } finally {
+            uploading = false;
+            renderFiles();
+        }
+    });
+
+    async function loadOwners() {
+        try {
+            const response = await fetch("/cargaImagenes/owners");
+            if (!response.ok) throw new Error(`Error HTTP ${response.status}`);
+            const owners = await response.json();
+
+            ownerSelect.replaceChildren(new Option("Selecciona un usuario", ""));
+            for (const owner of owners) {
+                ownerSelect.add(new Option(owner, owner));
+            }
+            ownerSelect.disabled = owners.length === 0;
+            if (owners.length === 0) {
+                message.textContent = "No se encontraron carpetas de usuario en el directorio configurado.";
+                message.className = "message error";
+            }
+            updateButtons();
+        } catch (error) {
+            ownerSelect.replaceChildren(new Option("No se pudieron cargar los usuarios", ""));
+            message.textContent = `Error al consultar las carpetas de usuario: ${error.message}`;
+            message.className = "message error";
+        }
+    }
+
+    loadOwners();
+</script>
+</body>
+</html>
