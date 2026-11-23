@@ -37,5 +37,12 @@ public class UploadImagesController {
 			@RequestParam("owner") 			String owner) {
         return cargaFileMediaService.procesarCargaImagen(file, modifiedDate, owner);
     }
+
+	@PostMapping("/upload/complete")
+	public ResponseEntity<String> registrarResumenCarga(
+			@RequestParam("owner") String owner,
+			@RequestParam("uploadedCount") int cantidadCargada) {
+		return cargaFileMediaService.registrarResumenCarga(owner, cantidadCargada);
+	}
 	
 }

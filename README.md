@@ -44,7 +44,7 @@ La raíz `/volume1/homes` se puede cambiar mediante la propiedad `upload.dir` o 
 
 ### Interfaz web
 
-Abre `http://localhost:8080/` para seleccionar varias imágenes o videos, ver la lista de archivos pendientes y cargarlos secuencialmente. La interfaz mantiene los archivos seleccionados en el navegador y permite reintentar los que fallen. Por seguridad, el navegador no expone la ruta absoluta local; se muestra la ruta relativa del archivo o su nombre.
+Abre `http://localhost:8080/` para seleccionar varias imágenes o videos, ver la lista de archivos pendientes y cargarlos secuencialmente. La interfaz muestra el porcentaje de avance y retira de la lista cada archivo que termina de cargar correctamente. Los archivos que fallen pasan a una lista de problemas y se reintentan hasta dos veces más, después de completar la carga inicial de los demás archivos. Los que sigan fallando quedan identificados como cancelados. Por seguridad, el navegador no expone la ruta absoluta local; se muestra la ruta relativa del archivo o su nombre.
 
 El selector de usuario obtiene las carpetas disponibles desde la raíz configurada por `upload.dir` o `UPLOAD_DIR` (por defecto, `/volume1/homes`). El destino se organiza bajo `{raíz}/{usuario}/Photos/{año}`.
 
@@ -63,6 +63,10 @@ El endpoint recibe una solicitud `multipart/form-data` con estos campos:
 | `owner` | Texto | Nombre de usuario que determina el directorio de destino. |
 
 La interfaz envía un archivo por solicitud e itera la lista seleccionada. Para imágenes se conserva la prioridad de fecha EXIF; para videos se utiliza la fecha de modificación del archivo enviada por el navegador.
+
+### `POST /cargaImagenes/upload/complete`
+
+La interfaz invoca este endpoint al terminar el lote, después de los reintentos. Recibe `owner` y `uploadedCount` y registra un resumen con el propietario y la cantidad total de archivos cargados correctamente.
 
 Ejemplo con `curl`:
 
@@ -116,7 +120,7 @@ La fecha EXIF original tiene prioridad sobre `modifiedDate`. La lectura de metad
 
 #### `guardarArchivo(MultipartFile file, String owner, String fechaResultado, String extension)`
 
-Extrae el año de `fechaResultado`, solicita la ruta anual a `obtenerDirectorioAnio` y crea los directorios que falten con `DirectorioUtil.validaDirectorio`. Después guarda el archivo con la fecha como nombre base. Si ese nombre exacto ya existe, usa `generarNombreDisponible`.
+Extrae el año de `fechaResultado`, solicita la ruta anual a `obtenerDirectorioAnio` y crea los directorios que falten con `DirectorioUtil.validaDirectorio`. Después guarda el archivo con la fecha como nombre base. Si ese nombre exacto ya existe, usa `generarNombreDisponible`. La ruta base `{raíz}/{usuario}/Photos` se registra una sola vez por usuario cuando inicia su primera carga. El log de cada archivo incluye el usuario entre corchetes antes de indicar el renombrado.
 
 La extensión del archivo original se conserva. Por ejemplo, una foto `foto.jpg` queda con extensión `.jpg`.
 
@@ -256,7 +260,9 @@ El proyecto utiliza Java 17 y Maven. Las dependencias principales incluyen Sprin
 
 ### 2026-11-22
 
-- Se agregó una interfaz web para seleccionar varias imágenes y videos, mantenerlos en una lista y cargarlos secuencialmente con indicador de progreso y opción de reintentar archivos fallidos.
+- Se agregó una interfaz web para seleccionar varias imágenes y videos, mantenerlos en una lista y cargarlos secuencialmente con indicador de progreso y reintentos automáticos para archivos fallidos.
+- Se añadió el porcentaje de avance; los archivos cargados se retiran de la lista y los fallidos se reintentan hasta dos veces después de completar la carga inicial.
+- Se agregó al log la ruta `{raíz}/{usuario}/Photos` una sola vez por usuario, el usuario en los mensajes de renombrado y un resumen final por lote con la cantidad cargada.
 - Se agregó `GET /cargaImagenes/owners` para poblar el selector con las carpetas de usuario existentes bajo la raíz de almacenamiento configurada.
 - Se habilitó el uso de la fecha de modificación del archivo para videos; las imágenes conservan la prioridad de fecha EXIF.
 - Se documentó que el navegador no expone la ruta absoluta local; la interfaz conserva los archivos seleccionados y muestra su nombre o ruta relativa.

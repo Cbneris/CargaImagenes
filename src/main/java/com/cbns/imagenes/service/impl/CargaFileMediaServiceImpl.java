@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -36,6 +38,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
 
     @Value("${upload.dir:/volume1/homes}")
     private String uploadDir = "/volume1/homes";
+    private final Set<String> ownersWithLoggedStoragePath = ConcurrentHashMap.newKeySet();
 
     @Override
     public ResponseEntity<String> procesarCargaImagen(MultipartFile file, String modifiedDate, String owner) {
@@ -47,6 +50,8 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         if (!esPropietarioValido(owner)) {
             return ResponseEntity.badRequest().body("El usuario no es válido.");
         }
+
+        logStoragePathOnce(owner);
 
         try (InputStream inputStream = file.getInputStream()) {
             String fechaResultado = resolverFecha(inputStream, modifiedDate, file.getContentType());
@@ -60,6 +65,27 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         }
 
         return ResponseEntity.ok("Imagen cargada exitosamente.");
+    }
+
+    @Override
+    public ResponseEntity<String> registrarResumenCarga(String owner, int cantidadCargada) {
+        if (!esPropietarioValido(owner)) {
+            return ResponseEntity.badRequest().body("El usuario no es válido.");
+        }
+        if (cantidadCargada < 0) {
+            return ResponseEntity.badRequest().body("La cantidad de archivos no puede ser negativa.");
+        }
+
+        logger.info("[{}] Carga finalizada: {} archivo(s) cargado(s).", owner, cantidadCargada);
+        return ResponseEntity.ok("Resumen de carga registrado.");
+    }
+
+    private void logStoragePathOnce(String owner) {
+        if (ownersWithLoggedStoragePath.add(owner)) {
+            Path rutaPropietario = Paths.get(uploadDir).toAbsolutePath().normalize()
+                    .resolve(owner).resolve("Photos");
+            logger.info("[UPLOAD] Directorio de almacenamiento para {}: {}", owner, rutaPropietario);
+        }
     }
 
     @Override
@@ -112,15 +138,12 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
 
         File destino = new File(directorioAnio, fechaResultado + extension);
 
-        if (!destino.exists()) {
-            file.transferTo(destino);
-            logger.info("[SUCCESS] - Renombrado " + file.getOriginalFilename() + " → " + destino.getName());
-            return;
+        if (destino.exists()) {
+            destino = generarNombreDisponible(directorioAnio, fechaResultado, extension);
         }
 
-        File destinoConNumero = generarNombreDisponible(directorioAnio, fechaResultado, extension);
-        file.transferTo(destinoConNumero);
-        logger.info("[SUCCESS] - Renombrado " + file.getOriginalFilename() + " → " + destinoConNumero.getName());
+        file.transferTo(destino);
+        logger.info("[SUCCESS] - [{}] Renombrado {} -> {}", owner, file.getOriginalFilename(), destino.getName());
     }
 
     Path obtenerDirectorioAnio(String owner, String anio) throws IOException {

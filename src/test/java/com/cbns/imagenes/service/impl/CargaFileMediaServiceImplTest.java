@@ -124,5 +124,19 @@ class CargaFileMediaServiceImplTest {
         assertEquals("El usuario no es válido.", resp.getBody());
     }
 
+    @Test
+    void testRegistrarResumenCarga_ValidaOwnerYCantidad() {
+        ResponseEntity<String> response = service.registrarResumenCarga("alice", 3);
+        assertEquals(200, response.getStatusCodeValue());
+
+        ResponseEntity<String> invalidCount = service.registrarResumenCarga("alice", -1);
+        assertEquals(400, invalidCount.getStatusCodeValue());
+        assertEquals("La cantidad de archivos no puede ser negativa.", invalidCount.getBody());
+
+        ResponseEntity<String> invalidOwner = service.registrarResumenCarga("../alice", 3);
+        assertEquals(400, invalidOwner.getStatusCodeValue());
+        assertEquals("El usuario no es válido.", invalidOwner.getBody());
+    }
+
     // NOTA: Para pruebas completas de procesarCargaImagen se recomienda usar un entorno con archivos temporales y mocks avanzados.
 }

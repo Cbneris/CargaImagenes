@@ -9,6 +9,8 @@ import org.springframework.web.multipart.MultipartFile;
 public interface CargaFileMediaService {
 	ResponseEntity<String> procesarCargaImagen(MultipartFile file, String modifiedDate, String owner);
 
+	ResponseEntity<String> registrarResumenCarga(String owner, int cantidadCargada);
+
 	List<String> obtenerOwnersDisponibles() throws IOException;
 
 	/**

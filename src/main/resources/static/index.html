@@ -159,11 +159,13 @@
     const selectedFiles = [];
     const problemFiles = [];
     let uploading = false;
+    let ownersAvailable = false;
 
     function updateButtons() {
         uploadButton.disabled = uploading || !ownerSelect.value || selectedFiles.length === 0;
         clearButton.disabled = uploading || (selectedFiles.length === 0 && problemFiles.length === 0);
         fileInput.disabled = uploading;
+        ownerSelect.disabled = uploading || !ownersAvailable;
     }
 
     function renderList(items, container, allowRemove) {
@@ -251,11 +253,11 @@
         progress.textContent = `${percent}% · ${status}`;
     }
 
-    function sendFile(item, onProgress) {
+    function sendFile(item, owner, onProgress) {
         const form = new FormData();
         form.append("images", item.file, item.file.name);
         form.append("modifiedDate", new Date(item.file.lastModified).toISOString());
-        form.append("owner", ownerSelect.value);
+        form.append("owner", owner);
 
         return new Promise((resolve, reject) => {
             const request = new XMLHttpRequest();
@@ -278,6 +280,7 @@
 
     uploadButton.addEventListener("click", async () => {
         const initialQueue = [...selectedFiles];
+        const owner = ownerSelect.value;
         const total = initialQueue.length;
         let uploaded = 0;
         let cancelled = 0;
@@ -297,7 +300,7 @@
                 renderFiles();
 
                 try {
-                    await sendFile(item, fraction => {
+                    await sendFile(item, owner, fraction => {
                         activeProgress = fraction;
                         updateProgress(uploaded + cancelled, activeProgress, total,
                             `Carga inicial ${index + 1}/${total}: ${item.file.name}`);
@@ -325,7 +328,7 @@
                     renderFiles();
 
                     try {
-                        await sendFile(item, fraction => {
+                        await sendFile(item, owner, fraction => {
                             activeProgress = fraction;
                             updateProgress(uploaded + cancelled, activeProgress, total,
                                 `Reintento ${attempt - 1}/2 ${index + 1}/${retryQueue.length}: ${item.file.name}`);
@@ -350,9 +353,29 @@
                 retryQueue = nextRetryQueue;
             }
 
+            let summaryError = "";
+            try {
+                const summaryForm = new FormData();
+                summaryForm.append("owner", owner);
+                summaryForm.append("uploadedCount", String(uploaded));
+                const response = await fetch("/cargaImagenes/upload/complete", {
+                    method: "POST",
+                    body: summaryForm
+                });
+                if (!response.ok) {
+                    const detail = await response.text();
+                    throw new Error(detail || `Error HTTP ${response.status}`);
+                }
+            } catch (error) {
+                summaryError = error.message;
+            }
+
             uploadProgress.value = 100;
             progress.textContent = `100% · ${uploaded} cargado(s), ${cancelled} cancelado(s)`;
-            if (cancelled === 0) {
+            if (summaryError) {
+                message.textContent = `La carga terminó, pero no se pudo registrar el resumen: ${summaryError}`;
+                message.className = "message error";
+            } else if (cancelled === 0) {
                 message.textContent = "Todos los archivos se cargaron correctamente.";
                 message.className = "message success";
             } else {
@@ -375,16 +398,18 @@
             for (const owner of owners) {
                 ownerSelect.add(new Option(owner, owner));
             }
-            ownerSelect.disabled = owners.length === 0;
+            ownersAvailable = owners.length > 0;
             if (owners.length === 0) {
                 message.textContent = "No se encontraron carpetas de usuario en el directorio configurado.";
                 message.className = "message error";
             }
             updateButtons();
         } catch (error) {
+            ownersAvailable = false;
             ownerSelect.replaceChildren(new Option("No se pudieron cargar los usuarios", ""));
             message.textContent = `Error al consultar las carpetas de usuario: ${error.message}`;
             message.className = "message error";
+            updateButtons();
         }
     }
 
