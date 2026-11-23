@@ -269,7 +269,9 @@
                 if (request.status >= 200 && request.status < 300) {
                     resolve();
                 } else {
-                    reject(new Error(request.responseText || `Error HTTP ${request.status}`));
+                    const error = new Error(request.responseText || `Error HTTP ${request.status}`);
+                    error.status = request.status;
+                    reject(error);
                 }
             });
             request.addEventListener("error", () => reject(new Error("Error de red durante la carga.")));
@@ -284,6 +286,7 @@
         const total = initialQueue.length;
         let uploaded = 0;
         let cancelled = 0;
+        let skippedDuplicates = 0;
         let retryQueue = [];
         let activeProgress = 0;
 
@@ -302,20 +305,25 @@
                 try {
                     await sendFile(item, owner, fraction => {
                         activeProgress = fraction;
-                        updateProgress(uploaded + cancelled, activeProgress, total,
+                        updateProgress(uploaded + cancelled + skippedDuplicates, activeProgress, total,
                             `Carga inicial ${index + 1}/${total}: ${item.file.name}`);
                     });
                     uploaded++;
                     selectedFiles.splice(selectedFiles.indexOf(item), 1);
                 } catch (error) {
-                    item.status = "Pendiente de reintento";
                     item.error = error.message;
                     selectedFiles.splice(selectedFiles.indexOf(item), 1);
                     problemFiles.push(item);
-                    retryQueue.push(item);
+                    if (error.status === 409) {
+                        item.status = "Omitido: ya existe (sin reintento)";
+                        skippedDuplicates++;
+                    } else {
+                        item.status = "Pendiente de reintento";
+                        retryQueue.push(item);
+                    }
                 }
                 activeProgress = 0;
-                updateProgress(uploaded + cancelled, activeProgress, total,
+                updateProgress(uploaded + cancelled + skippedDuplicates, activeProgress, total,
                     `Carga inicial ${index + 1}/${total}`);
                 renderFiles();
             }
@@ -330,14 +338,17 @@
                     try {
                         await sendFile(item, owner, fraction => {
                             activeProgress = fraction;
-                            updateProgress(uploaded + cancelled, activeProgress, total,
+                            updateProgress(uploaded + cancelled + skippedDuplicates, activeProgress, total,
                                 `Reintento ${attempt - 1}/2 ${index + 1}/${retryQueue.length}: ${item.file.name}`);
                         });
                         uploaded++;
                         problemFiles.splice(problemFiles.indexOf(item), 1);
                     } catch (error) {
                         item.error = error.message;
-                        if (attempt === 3) {
+                        if (error.status === 409) {
+                            item.status = "Omitido: ya existe (sin reintento)";
+                            skippedDuplicates++;
+                        } else if (attempt === 3) {
                             item.status = "Cancelado tras 3 intentos";
                             cancelled++;
                         } else {
@@ -346,7 +357,7 @@
                         }
                     }
                     activeProgress = 0;
-                    updateProgress(uploaded + cancelled, activeProgress, total,
+                    updateProgress(uploaded + cancelled + skippedDuplicates, activeProgress, total,
                         `Reintento ${attempt - 1}/2 ${index + 1}/${retryQueue.length}`);
                     renderFiles();
                 }
@@ -371,15 +382,22 @@
             }
 
             uploadProgress.value = 100;
-            progress.textContent = `100% · ${uploaded} cargado(s), ${cancelled} cancelado(s)`;
+            progress.textContent = `100% · ${uploaded} cargado(s), ${skippedDuplicates} duplicado(s), ${cancelled} cancelado(s)`;
             if (summaryError) {
                 message.textContent = `La carga terminó, pero no se pudo registrar el resumen: ${summaryError}`;
                 message.className = "message error";
-            } else if (cancelled === 0) {
+            } else if (cancelled === 0 && skippedDuplicates === 0) {
                 message.textContent = "Todos los archivos se cargaron correctamente.";
                 message.className = "message success";
             } else {
-                message.textContent = `${cancelled} archivo(s) quedaron en la lista de problemas tras 3 intentos.`;
+                const issueSummary = [];
+                if (skippedDuplicates > 0) {
+                    issueSummary.push(`${skippedDuplicates} duplicado(s) omitido(s) sin reintento`);
+                }
+                if (cancelled > 0) {
+                    issueSummary.push(`${cancelled} archivo(s) cancelado(s) tras 3 intentos`);
+                }
+                message.textContent = `${issueSummary.join("; ")}. Consulta la lista de problemas.`;
                 message.className = "message error";
             }
         } finally {

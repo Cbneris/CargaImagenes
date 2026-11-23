@@ -5,11 +5,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -87,16 +86,7 @@ class CargaFileMediaServiceImplTest {
     @Test
     void testProcesarCargaImagen_VideoUsaFechaDeModificacion() throws IOException {
         ReflectionTestUtils.setField(service, "uploadDir", homes.toString());
-        MultipartFile file = Mockito.mock(MultipartFile.class);
-        Mockito.when(file.isEmpty()).thenReturn(false);
-        Mockito.when(file.getContentType()).thenReturn("video/mp4");
-        Mockito.when(file.getOriginalFilename()).thenReturn("video.mp4");
-        Mockito.when(file.getInputStream()).thenReturn(new ByteArrayInputStream(new byte[] {1, 2, 3}));
-        Mockito.doAnswer(invocation -> {
-            File destination = invocation.getArgument(0);
-            Files.write(destination.toPath(), new byte[] {1, 2, 3});
-            return null;
-        }).when(file).transferTo(Mockito.any(File.class));
+        MultipartFile file = new MockMultipartFile("images", "video.mp4", "video/mp4", new byte[] {1, 2, 3});
 
         String modifiedDate = "2024-05-24T12:00:00Z";
         String expectedDate = FechaUtil.normalizarFecha(modifiedDate);
@@ -105,6 +95,25 @@ class CargaFileMediaServiceImplTest {
         assertEquals(200, response.getStatusCodeValue());
         assertTrue(Files.exists(homes.resolve("alice/Photos")
                 .resolve(expectedDate.substring(0, 4)).resolve(expectedDate + ".mp4")));
+    }
+
+    @Test
+    void testProcesarCargaImagen_ArchivoDuplicadoRetornaConflictoSinSobrescribir() throws IOException {
+        ReflectionTestUtils.setField(service, "uploadDir", homes.toString());
+        String modifiedDate = "2024-05-24T12:00:00Z";
+        String expectedDate = FechaUtil.normalizarFecha(modifiedDate);
+        Path destino = homes.resolve("alice/Photos")
+                .resolve(expectedDate.substring(0, 4)).resolve(expectedDate + ".mp4");
+        Files.createDirectories(destino.getParent());
+        byte[] existingContent = new byte[] {9, 8, 7};
+        Files.write(destino, existingContent);
+
+        MultipartFile file = new MockMultipartFile("images", "video.mp4", "video/mp4", new byte[] {1, 2, 3});
+        ResponseEntity<String> response = service.procesarCargaImagen(file, modifiedDate, "alice");
+
+        assertEquals(409, response.getStatusCodeValue());
+        assertEquals("El archivo " + expectedDate + ".mp4 ya existe y no se cargó.", response.getBody());
+        assertArrayEquals(existingContent, Files.readAllBytes(destino));
     }
 
     @Test

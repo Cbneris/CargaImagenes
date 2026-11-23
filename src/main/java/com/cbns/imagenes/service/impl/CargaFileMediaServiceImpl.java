@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -59,6 +60,14 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
 
             guardarArchivo(file, owner, fechaResultado, extension);
 
+        } catch (FileAlreadyExistsException e) {
+            String nombreArchivo = e.getFile() == null
+                    ? file.getOriginalFilename()
+                    : Paths.get(e.getFile()).getFileName().toString();
+            String mensaje = "El archivo " + nombreArchivo + " ya existe y no se cargó.";
+            logger.warn("[DUPLICATE] - [{}] Se omitió {} porque ya existe el destino {}.",
+                    owner, file.getOriginalFilename(), nombreArchivo);
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(mensaje);
         } catch (Exception e) {
             logger.error("Error al procesar la carga de imagen", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
@@ -127,7 +136,7 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
     }
 
     /**
-     * Guarda el archivo con el nombre base, o con un sufijo numérico si ya existe.
+     * Guarda el archivo con el nombre base y rechaza el destino si ya existe.
      */
     private void guardarArchivo(MultipartFile file, String owner, String fechaResultado, String extension) throws IOException {
         String anio = obtenerAnio(fechaResultado);
@@ -139,10 +148,13 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
         File destino = new File(directorioAnio, fechaResultado + extension);
 
         if (destino.exists()) {
-            destino = generarNombreDisponible(directorioAnio, fechaResultado, extension);
+            throw new FileAlreadyExistsException(destino.getAbsolutePath());
         }
 
-        file.transferTo(destino);
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.copy(inputStream, destino.toPath());
+        }
+
         logger.info("[SUCCESS] - [{}] Renombrado {} -> {}", owner, file.getOriginalFilename(), destino.getName());
     }
 
@@ -168,7 +180,8 @@ public class CargaFileMediaServiceImpl implements CargaFileMediaService {
     }
 
     /**
-     * Busca el primer nombre disponible agregando un contador incremental.
+     * Método conservado, pero no debe usarse en cargas para evitar guardar archivos duplicados
+     * con nombres alternativos.
      */
     private File generarNombreDisponible(File directorioAnio, String fechaResultado, String extension) {
         int contador = 1;
