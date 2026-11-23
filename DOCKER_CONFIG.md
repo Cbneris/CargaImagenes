@@ -12,7 +12,7 @@ Este archivo contiene instrucciones para construir y ejecutar la imagen Docker d
 Desde la raíz del proyecto:
 
 ```bash
-docker build -t carga-imagenes:latest .
+docker build -t carga-imagenes:1.0.0 .
 ```
 
 ## Ejecutar el contenedor con volumen del NAS
@@ -20,7 +20,7 @@ docker build -t carga-imagenes:latest .
 Ejemplo que monta `/volume1/homes` del NAS en la misma ruta dentro del contenedor:
 
 ```bash
-docker run -d -p 8080:8080 -v "/volume1/homes:/volume1/homes" -e UPLOAD_DIR=/volume1/homes --name carga-imagenes carga-imagenes:latest
+docker run -d -p 8080:8080 -v "/volume1/homes:/volume1/homes" -e UPLOAD_DIR=/volume1/homes --name carga-imagenes carga-imagenes:1.0.0
 ```
 
 Las imágenes de cada usuario se guardan en `/volume1/homes/{usuario}/Photos/{año}`. Por ejemplo, las imágenes de `christian_neri` tomadas en 2026 se guardan en `/volume1/homes/christian_neri/Photos/2026`.
@@ -36,7 +36,7 @@ El archivo incluido monta el volumen del NAS para las imágenes y para el archiv
 ```yaml
 services:
   carga-imagenes:
-    image: carga-imagenes:latest
+    image: carga-imagenes:1.0.0
     build: .
     ports:
       - "8080:8080"

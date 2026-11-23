@@ -1,6 +1,6 @@
 services:
   carga-imagenes:
-    image: carga-imagenes:latest
+    image: carga-imagenes:1.0.0
     build: .
     ports:
       - "8080:8080"

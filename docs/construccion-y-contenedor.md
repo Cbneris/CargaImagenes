@@ -12,7 +12,7 @@ Esta guía explica cómo construir la imagen Docker del proyecto y cómo crear y
 Desde la raíz del proyecto, ejecuta:
 
 ```bash
-docker build -t carga-imagenes:latest .
+docker build -t carga-imagenes:1.0.0 .
 ```
 
 Docker usa el `Dockerfile` para construir la aplicación con Maven y Java 17 y luego empaqueta el JAR en una imagen de ejecución Java 17. El punto (`.`) indica que la raíz del proyecto es el contexto de construcción.
@@ -35,7 +35,7 @@ docker run -d \
   -e LOGGING_FILE_NAME=/volume1/homes/admin/uploadImages/carga-imagenes.log \
   -v /volume1/homes:/volume1/homes \
   --restart unless-stopped \
-  carga-imagenes:latest
+  carga-imagenes:1.0.0
 ```
 
 El comando crea el contenedor `carga-imagenes` en segundo plano, publica el puerto 8080 y monta la carpeta del host en la misma ruta dentro del contenedor. Asegúrate de que el proceso de Docker tenga permiso para escribir en esa carpeta. Si la ruta de origen no existe en el host, créala antes de iniciar el contenedor.
