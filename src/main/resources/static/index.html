@@ -83,7 +83,30 @@
             border-radius: 8px;
         }
 
-        .file-info { min-width: 0; }
+        .file-preview {
+            display: grid;
+            width: 84px;
+            height: 84px;
+            flex: 0 0 84px;
+            place-items: center;
+            overflow: hidden;
+            border: 1px solid #dfe5ef;
+            border-radius: 8px;
+            background: #edf1f7;
+            color: #647087;
+            font-size: .8rem;
+            text-align: center;
+        }
+
+        .file-preview img,
+        .file-preview video {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .file-info { min-width: 0; flex: 1; }
         .file-path { overflow-wrap: anywhere; font-weight: 600; }
         .file-status { margin-top: 4px; color: #58647a; font-size: .85rem; }
         .remove-button { min-width: 42px; padding: 0 10px; color: #9c2635; }
@@ -100,6 +123,7 @@
             body { padding: 18px 10px; }
             main { padding: 22px 16px; }
             .actions { grid-template-columns: 1fr; }
+            .file-preview { width: 68px; height: 68px; flex-basis: 68px; }
         }
     </style>
 </head>
@@ -175,6 +199,8 @@
             const row = document.createElement("li");
             row.className = "file-item";
 
+            row.append(createPreview(item));
+
             const info = document.createElement("div");
             info.className = "file-info";
 
@@ -197,6 +223,7 @@
                 remove.setAttribute("aria-label", `Quitar ${item.file.name}`);
                 remove.disabled = uploading;
                 remove.addEventListener("click", () => {
+                    releasePreview(item);
                     items.splice(index, 1);
                     renderFiles();
                 });
@@ -220,6 +247,44 @@
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
+    function getPreviewUrl(item) {
+        if (!item.previewUrl) {
+            item.previewUrl = URL.createObjectURL(item.file);
+        }
+        return item.previewUrl;
+    }
+
+    function releasePreview(item) {
+        if (item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+            item.previewUrl = null;
+        }
+    }
+
+    function createPreview(item) {
+        const preview = document.createElement("div");
+        preview.className = "file-preview";
+
+        const type = item.file.type || "";
+        if (type.startsWith("image/")) {
+            const image = document.createElement("img");
+            image.src = getPreviewUrl(item);
+            image.alt = `Vista previa de ${item.file.name}`;
+            preview.append(image);
+        } else if (type.startsWith("video/")) {
+            const video = document.createElement("video");
+            video.src = getPreviewUrl(item);
+            video.muted = true;
+            video.preload = "metadata";
+            video.playsInline = true;
+            video.setAttribute("aria-label", `Vista previa de ${item.file.name}`);
+            preview.append(video);
+        } else {
+            preview.textContent = "Sin vista previa";
+        }
+        return preview;
+    }
+
     fileInput.addEventListener("change", () => {
         for (const file of fileInput.files) {
             selectedFiles.push({ file, status: "Pendiente" });
@@ -239,6 +304,9 @@
     });
 
     clearButton.addEventListener("click", () => {
+        for (const item of [...selectedFiles, ...problemFiles]) {
+            releasePreview(item);
+        }
         selectedFiles.length = 0;
         problemFiles.length = 0;
         uploadProgress.value = 0;
@@ -309,6 +377,7 @@
                             `Carga inicial ${index + 1}/${total}: ${item.file.name}`);
                     });
                     uploaded++;
+                    releasePreview(item);
                     selectedFiles.splice(selectedFiles.indexOf(item), 1);
                 } catch (error) {
                     item.error = error.message;
@@ -342,6 +411,7 @@
                                 `Reintento ${attempt - 1}/2 ${index + 1}/${retryQueue.length}: ${item.file.name}`);
                         });
                         uploaded++;
+                        releasePreview(item);
                         problemFiles.splice(problemFiles.indexOf(item), 1);
                     } catch (error) {
                         item.error = error.message;
