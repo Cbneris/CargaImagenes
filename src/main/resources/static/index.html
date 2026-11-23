@@ -87,7 +87,10 @@
         .file-path { overflow-wrap: anywhere; font-weight: 600; }
         .file-status { margin-top: 4px; color: #58647a; font-size: .85rem; }
         .remove-button { min-width: 42px; padding: 0 10px; color: #9c2635; }
-        .actions { display: flex; margin-top: 24px; align-items: center; gap: 12px; }
+        .actions { display: grid; margin-top: 24px; grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
+        .progress-indicator { display: flex; align-items: center; gap: 10px; }
+        .progress-indicator progress { width: 100%; height: 18px; accent-color: #2456a6; }
+        .progress-indicator span { min-width: 44px; font-weight: 600; text-align: right; }
         .primary { border-color: #2456a6; background: #2456a6; color: #fff; font-weight: 600; }
         .message { min-height: 24px; margin: 16px 0 0; }
         .message.error { color: #a32132; }
@@ -96,7 +99,7 @@
         @media (max-width: 560px) {
             body { padding: 18px 10px; }
             main { padding: 22px 16px; }
-            .actions { align-items: stretch; flex-direction: column; }
+            .actions { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -125,9 +128,17 @@
     </div>
     <ul id="file-list" class="file-list"></ul>
 
+    <div class="list-heading">
+        <h2>Archivos con problemas <span id="problem-count">(0)</span></h2>
+    </div>
+    <ul id="problem-list" class="file-list"></ul>
+
     <div class="actions">
         <button id="upload-button" class="primary" type="button" disabled>Cargar archivos</button>
-        <span id="progress" aria-live="polite"></span>
+        <div class="progress-indicator">
+            <progress id="upload-progress" max="100" value="0" aria-label="Progreso de carga"></progress>
+            <span id="progress" aria-live="polite">0%</span>
+        </div>
     </div>
     <p id="message" class="message" role="status" aria-live="polite"></p>
 </main>
@@ -137,26 +148,28 @@
     const ownerSelect = document.getElementById("owner");
     const fileList = document.getElementById("file-list");
     const fileCount = document.getElementById("file-count");
+    const problemList = document.getElementById("problem-list");
+    const problemCount = document.getElementById("problem-count");
     const uploadButton = document.getElementById("upload-button");
     const clearButton = document.getElementById("clear-button");
     const progress = document.getElementById("progress");
+    const uploadProgress = document.getElementById("upload-progress");
     const message = document.getElementById("message");
     const destination = document.getElementById("destination");
     const selectedFiles = [];
+    const problemFiles = [];
     let uploading = false;
 
     function updateButtons() {
-        const hasPending = selectedFiles.some(item => item.status !== "Cargado");
-        uploadButton.disabled = uploading || !ownerSelect.value || !hasPending;
-        clearButton.disabled = uploading || selectedFiles.length === 0;
+        uploadButton.disabled = uploading || !ownerSelect.value || selectedFiles.length === 0;
+        clearButton.disabled = uploading || (selectedFiles.length === 0 && problemFiles.length === 0);
         fileInput.disabled = uploading;
     }
 
-    function renderFiles() {
-        fileList.replaceChildren();
-        fileCount.textContent = `(${selectedFiles.length})`;
+    function renderList(items, container, allowRemove) {
+        container.replaceChildren();
 
-        for (const [index, item] of selectedFiles.entries()) {
+        for (const [index, item] of items.entries()) {
             const row = document.createElement("li");
             row.className = "file-item";
 
@@ -170,23 +183,32 @@
             const status = document.createElement("div");
             status.className = "file-status";
             status.textContent = `${formatSize(item.file.size)} · ${item.status}`;
+            if (item.error) status.textContent += ` — ${item.error}`;
             info.append(path, status);
 
-            const remove = document.createElement("button");
-            remove.className = "remove-button";
-            remove.type = "button";
-            remove.textContent = "Quitar";
-            remove.setAttribute("aria-label", `Quitar ${item.file.name}`);
-            remove.disabled = uploading;
-            remove.addEventListener("click", () => {
-                selectedFiles.splice(index, 1);
-                renderFiles();
-                updateButtons();
-            });
-
-            row.append(info, remove);
-            fileList.append(row);
+            row.append(info);
+            if (allowRemove) {
+                const remove = document.createElement("button");
+                remove.className = "remove-button";
+                remove.type = "button";
+                remove.textContent = "Quitar";
+                remove.setAttribute("aria-label", `Quitar ${item.file.name}`);
+                remove.disabled = uploading;
+                remove.addEventListener("click", () => {
+                    items.splice(index, 1);
+                    renderFiles();
+                });
+                row.append(remove);
+            }
+            container.append(row);
         }
+    }
+
+    function renderFiles() {
+        fileCount.textContent = `(${selectedFiles.length})`;
+        problemCount.textContent = `(${problemFiles.length})`;
+        renderList(selectedFiles, fileList, true);
+        renderList(problemFiles, problemList, false);
         updateButtons();
     }
 
@@ -201,6 +223,8 @@
             selectedFiles.push({ file, status: "Pendiente" });
         }
         fileInput.value = "";
+        uploadProgress.value = 0;
+        progress.textContent = "0%";
         message.textContent = "";
         renderFiles();
     });
@@ -214,55 +238,126 @@
 
     clearButton.addEventListener("click", () => {
         selectedFiles.length = 0;
-        progress.textContent = "";
+        problemFiles.length = 0;
+        uploadProgress.value = 0;
+        progress.textContent = "0%";
         message.textContent = "";
         renderFiles();
     });
 
+    function updateProgress(completed, activeProgress, total, status) {
+        const percent = total === 0 ? 0 : Math.min(100, Math.floor((completed + activeProgress) * 100 / total));
+        uploadProgress.value = percent;
+        progress.textContent = `${percent}% · ${status}`;
+    }
+
+    function sendFile(item, onProgress) {
+        const form = new FormData();
+        form.append("images", item.file, item.file.name);
+        form.append("modifiedDate", new Date(item.file.lastModified).toISOString());
+        form.append("owner", ownerSelect.value);
+
+        return new Promise((resolve, reject) => {
+            const request = new XMLHttpRequest();
+            request.open("POST", "/cargaImagenes/upload");
+            request.upload.addEventListener("progress", event => {
+                if (event.lengthComputable) onProgress(event.loaded / event.total);
+            });
+            request.addEventListener("load", () => {
+                if (request.status >= 200 && request.status < 300) {
+                    resolve();
+                } else {
+                    reject(new Error(request.responseText || `Error HTTP ${request.status}`));
+                }
+            });
+            request.addEventListener("error", () => reject(new Error("Error de red durante la carga.")));
+            request.addEventListener("abort", () => reject(new Error("La carga fue interrumpida.")));
+            request.send(form);
+        });
+    }
+
     uploadButton.addEventListener("click", async () => {
-        const pending = selectedFiles.filter(item => item.status !== "Cargado");
+        const initialQueue = [...selectedFiles];
+        const total = initialQueue.length;
+        let uploaded = 0;
+        let cancelled = 0;
+        let retryQueue = [];
+        let activeProgress = 0;
+
         uploading = true;
         message.className = "message";
         message.textContent = "";
+        uploadProgress.value = 0;
         renderFiles();
 
-        let completed = 0;
-        let failed = 0;
         try {
-            for (const item of pending) {
-                item.status = "Cargando...";
-                progress.textContent = `Cargando ${completed + failed + 1} de ${pending.length}`;
+            for (const [index, item] of initialQueue.entries()) {
+                item.status = "Cargando (intento 1 de 3)";
+                item.error = "";
                 renderFiles();
 
-                const form = new FormData();
-                form.append("images", item.file, item.file.name);
-                form.append("modifiedDate", new Date(item.file.lastModified).toISOString());
-                form.append("owner", ownerSelect.value);
-
                 try {
-                    const response = await fetch("/cargaImagenes/upload", {
-                        method: "POST",
-                        body: form
+                    await sendFile(item, fraction => {
+                        activeProgress = fraction;
+                        updateProgress(uploaded + cancelled, activeProgress, total,
+                            `Carga inicial ${index + 1}/${total}: ${item.file.name}`);
                     });
-                    if (!response.ok) {
-                        const detail = await response.text();
-                        throw new Error(detail || `Error HTTP ${response.status}`);
-                    }
-                    item.status = "Cargado";
-                    completed++;
+                    uploaded++;
+                    selectedFiles.splice(selectedFiles.indexOf(item), 1);
                 } catch (error) {
-                    item.status = "Error";
-                    failed++;
-                    message.textContent = `${item.file.name}: ${error.message}`;
-                    message.className = "message error";
+                    item.status = "Pendiente de reintento";
+                    item.error = error.message;
+                    selectedFiles.splice(selectedFiles.indexOf(item), 1);
+                    problemFiles.push(item);
+                    retryQueue.push(item);
                 }
+                activeProgress = 0;
+                updateProgress(uploaded + cancelled, activeProgress, total,
+                    `Carga inicial ${index + 1}/${total}`);
                 renderFiles();
             }
 
-            progress.textContent = `Proceso terminado: ${completed} cargado(s), ${failed} con error.`;
-            if (failed === 0) {
-                message.textContent = "Todos los archivos pendientes se cargaron correctamente.";
+            for (let attempt = 2; attempt <= 3 && retryQueue.length > 0; attempt++) {
+                const nextRetryQueue = [];
+                for (const [index, item] of retryQueue.entries()) {
+                    item.attempts = attempt;
+                    item.status = `Reintento ${attempt - 1}/2 en curso`;
+                    renderFiles();
+
+                    try {
+                        await sendFile(item, fraction => {
+                            activeProgress = fraction;
+                            updateProgress(uploaded + cancelled, activeProgress, total,
+                                `Reintento ${attempt - 1}/2 ${index + 1}/${retryQueue.length}: ${item.file.name}`);
+                        });
+                        uploaded++;
+                        problemFiles.splice(problemFiles.indexOf(item), 1);
+                    } catch (error) {
+                        item.error = error.message;
+                        if (attempt === 3) {
+                            item.status = "Cancelado tras 3 intentos";
+                            cancelled++;
+                        } else {
+                            item.status = `Falló el intento ${attempt}; se reintentará`;
+                            nextRetryQueue.push(item);
+                        }
+                    }
+                    activeProgress = 0;
+                    updateProgress(uploaded + cancelled, activeProgress, total,
+                        `Reintento ${attempt - 1}/2 ${index + 1}/${retryQueue.length}`);
+                    renderFiles();
+                }
+                retryQueue = nextRetryQueue;
+            }
+
+            uploadProgress.value = 100;
+            progress.textContent = `100% · ${uploaded} cargado(s), ${cancelled} cancelado(s)`;
+            if (cancelled === 0) {
+                message.textContent = "Todos los archivos se cargaron correctamente.";
                 message.className = "message success";
+            } else {
+                message.textContent = `${cancelled} archivo(s) quedaron en la lista de problemas tras 3 intentos.`;
+                message.className = "message error";
             }
         } finally {
             uploading = false;
